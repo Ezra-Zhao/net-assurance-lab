@@ -1,0 +1,41 @@
+{
+  "all_packets": {
+    "echo_throughput_pps": 3000.3,
+    "echoed": 9000,
+    "loss_rate": 0.0,
+    "lost": 0,
+    "rtt_ms": {
+      "max": 26.482,
+      "mean": 0.702,
+      "min": 0.002,
+      "p50": 0.003,
+      "p95": 3.047,
+      "p99": 6.952
+    },
+    "sent": 9000,
+    "throughput_pps": 3000.3,
+    "wall_seconds": 2.9997
+  },
+  "malformed_echoed": 0,
+  "malformed_sent": 0,
+  "mode": "sustained",
+  "packet_size_bytes": 256,
+  "target": "127.0.0.1:5005",
+  "valid_packets": {
+    "echo_throughput_pps": 3000.3,
+    "echoed": 9000,
+    "loss_rate": 0.0,
+    "lost": 0,
+    "rtt_ms": {
+      "max": 26.482,
+      "mean": 0.702,
+      "min": 0.002,
+      "p50": 0.003,
+      "p95": 3.047,
+      "p99": 6.952
+    },
+    "sent": 9000,
+    "throughput_pps": 3000.3,
+    "wall_seconds": 2.9997
+  }
+}

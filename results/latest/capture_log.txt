@@ -1,0 +1,2 @@
+CAPTURE_METHOD=raw-socket
+raw-socket captured 26931 packets -> /home/hatch/workspace/oxide-proofs/net-assurance-lab/captures/fault_scenario.pcap
