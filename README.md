@@ -39,6 +39,10 @@ src/
   run_experiment.py         orchestrates all four scenarios + capture
   gen_report.py             renders sample-report/FAULT_REPORT.md purely
                             from the run artifacts and the pcap itself
+  prom_exporter.py          Prometheus exporter for the latest run
+                            (see "Monitoring" below)
+monitoring/                 Prometheus config + alert rules, Grafana
+                            provisioning + dashboards, start_local.sh
 tests/test_protocol.py      protocol round-trip and malformed-rejection tests
 results/<run_id>/           raw artifacts of one run (CSVs, JSONs, logs)
 results/latest/             copy of the most recent run
@@ -62,6 +66,89 @@ the report records which path produced the pcap. No root is needed for
 the traffic itself; the raw-socket capture path needs permission to open
 a raw IP socket (root or `CAP_NET_RAW`), and `capture.py` fails loudly
 rather than fabricating a capture if it gets zero packets.
+
+## Monitoring (Prometheus + Grafana)
+
+A production-style monitoring module wraps the bench; it changes no
+existing behaviour — the exporter only *reads* run artifacts.
+
+```
+src/prom_exporter.py        Prometheus exporter (stdlib only). Serves
+                            the latest run's metrics at
+                            http://127.0.0.1:9108/metrics (+ /healthz).
+                            Re-reads results/latest on every scrape, so
+                            a fresh ./run_lab.sh is picked up with no
+                            restart (the lab publishes results at the
+                            end of a run, so that is the live path).
+monitoring/
+  prometheus.yml            scrape config: job net-assurance-lab ->
+                            127.0.0.1:9108 (5 s), plus Prometheus itself;
+                            loads the rule files below
+  rules/alerts.yml          10 alert rules (see list below)
+  grafana/provisioning/
+    datasources/prometheus.yml   datasource "Prometheus", uid prometheus,
+                                   http://127.0.0.1:9090, default
+    dashboards/dashboards.yml    file provider; dashboard folder comes
+                                   from $NETLAB_DASHBOARDS_PATH
+  grafana/dashboards/
+    service-overview.json        "Service Overview" dashboard
+    fault-comparison.json        "Fault Injection Comparison" dashboard
+  start_local.sh            starts exporter (+ Prometheus / Grafana
+                            when PROM_BIN / GRAFANA_BIN point at local
+                            binaries; they are not vendored in the repo)
+tests/test_prom_exporter.py exporter unit + HTTP tests
+```
+
+Exported metric families (all `nal_*`, labelled by `scenario`/`mode`
+where applicable): packets sent/echoed/lost counters, `nal_loss_ratio`,
+`nal_throughput_pps` (send/echo), `nal_rtt_ms` by `stat`
+(min/mean/p50/p95/p99/max), `nal_rtt_histogram_ms` buckets recomputed
+from the per-packet CSVs, server counters, fault-proxy counters by kind
+(`in_client`/`in_server`/`dropped_loss`/`dropped_flap`/`forwarded`/
+`delayed`), `nal_fault_proxy_drop_ratio` by cause, `nal_link_flap_detected`,
+`nal_fault_injection_config` (the *configured* loss/delay/jitter/flap
+parameters of `run_experiment.py` — configured, not measured, and kept
+in a separate family for exactly that reason), run info / run timestamp
+/ results age, and exporter self-health (`nal_exporter_results_present`,
+`nal_exporter_scenarios_exported`).
+
+How to run it locally:
+
+```bash
+python3 src/prom_exporter.py                       # exporter alone
+promtool check config monitoring/prometheus.yml    # validate config
+promtool check rules monitoring/rules/alerts.yml   # validate rules
+prometheus --config.file=monitoring/prometheus.yml \
+    --storage.tsdb.path=/tmp/nal-prom-data --web.listen-address=127.0.0.1:9090
+# Grafana: point GF_PATHS_PROVISIONING at monitoring/grafana/provisioning
+# and set NETLAB_DASHBOARDS_PATH=$PWD/monitoring/grafana/dashboards,
+# or import the two dashboard JSON files by hand.
+# Convenience wrapper (binaries via env): ./monitoring/start_local.sh
+```
+
+Dashboards: **Service Overview** — loss ratio, RTT p99, echo throughput
+and results-age stats; throughput, loss and RTT-percentile time series;
+packet and server counters; RTT histogram. **Fault Injection
+Comparison** — baseline_sustained vs fault_sustained loss / RTT /
+throughput side by side, proxy forwarded-vs-dropped split, drop share
+by cause (loss vs flap — the localisation signal), flap-detected stat,
+and the injected-configuration panel.
+
+Alerts (`monitoring/rules/alerts.yml`, severity in brackets):
+`NalBaselineHighPacketLoss` [warning, baseline loss > 5%],
+`NalBaselineP99LatencyHigh` [warning, baseline p99 > 50 ms],
+`NalBaselineThroughputCollapse` [warning, echo < 50% of send],
+`NalFaultLossAboveInjectionBand` [warning, fault loss > 75%],
+`NalFaultP99LatencyExtreme` [warning, fault p99 > 1000 ms],
+`NalLinkFlapDetected` [info, flap drops observed — the injected fault
+being detected as designed], `NalFlapShareDominatesLoss` [info],
+`NalMalformedPacketEchoed` [critical, parser breach — must stay 0],
+`NalResultsStale` [warning, exported run older than 24 h],
+`NalExporterResultsMissing` [critical, artifacts incomplete].
+No Alertmanager is wired up: alerts are observed on Prometheus'
+`/alerts` page / API. Verification status (what was actually run
+against real Prometheus/Grafana binaries on the build host) is recorded
+in `VERIFICATION.md`, "Supplement: Prometheus + Grafana monitoring".
 
 ## Metrics collected (all measured, never templated)
 

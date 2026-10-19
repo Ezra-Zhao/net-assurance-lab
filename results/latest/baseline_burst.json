@@ -1,20 +1,20 @@
 {
   "all_packets": {
-    "echo_throughput_pps": 1958.5,
+    "echo_throughput_pps": 1940.8,
     "echoed": 2000,
     "loss_rate": 0.0,
     "lost": 0,
     "rtt_ms": {
-      "max": 5.57,
-      "mean": 2.245,
-      "min": 0.556,
-      "p50": 2.117,
-      "p95": 4.656,
-      "p99": 5.517
+      "max": 12.614,
+      "mean": 4.559,
+      "min": 0.854,
+      "p50": 3.786,
+      "p95": 9.348,
+      "p99": 12.486
     },
     "sent": 2000,
-    "throughput_pps": 1958.5,
-    "wall_seconds": 1.0212
+    "throughput_pps": 1940.8,
+    "wall_seconds": 1.0305
   },
   "malformed_echoed": 0,
   "malformed_sent": 0,
@@ -22,20 +22,20 @@
   "packet_size_bytes": 256,
   "target": "127.0.0.1:5005",
   "valid_packets": {
-    "echo_throughput_pps": 1958.5,
+    "echo_throughput_pps": 1940.8,
     "echoed": 2000,
     "loss_rate": 0.0,
     "lost": 0,
     "rtt_ms": {
-      "max": 5.57,
-      "mean": 2.245,
-      "min": 0.556,
-      "p50": 2.117,
-      "p95": 4.656,
-      "p99": 5.517
+      "max": 12.614,
+      "mean": 4.559,
+      "min": 0.854,
+      "p50": 3.786,
+      "p95": 9.348,
+      "p99": 12.486
     },
     "sent": 2000,
-    "throughput_pps": 1958.5,
-    "wall_seconds": 1.0212
+    "throughput_pps": 1940.8,
+    "wall_seconds": 1.0305
   }
 }

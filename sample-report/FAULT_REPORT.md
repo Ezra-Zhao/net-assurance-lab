@@ -1,10 +1,10 @@
 # Fault Report — loopback link degradation under sustained load
 
-Run ID: `20261019-154535` · Python 3.12.3 · platform linux · target 127.0.0.1 only
+Run ID: `20261019-171627` · Python 3.12.3 · platform linux · target 127.0.0.1 only
 
 ## Phenomenon
 
-Under a sustained 2,000 pps UDP stream, the path through the fault-injection proxy showed a packet loss rate of 0.5275 (baseline direct path: 0.0000) and a p95 round-trip time of 162.401 ms (baseline p95: 3.047 ms). Loss arrived in clusters aligned with the proxy's periodic link-flap windows, on top of a uniform random-loss background — the signature of a link that is both lossy and intermittently down, not a congested-but-healthy link (which would inflate latency without this loss pattern).
+Under a sustained 2,000 pps UDP stream, the path through the fault-injection proxy showed a packet loss rate of 0.5897 (baseline direct path: 0.0000) and a p95 round-trip time of 364.273 ms (baseline p95: 41.96 ms). Loss arrived in clusters aligned with the proxy's periodic link-flap windows, on top of a uniform random-loss background — the signature of a link that is both lossy and intermittently down, not a congested-but-healthy link (which would inflate latency without this loss pattern).
 
 ## Reproduction steps
 
@@ -16,23 +16,23 @@ Under a sustained 2,000 pps UDP stream, the path through the fault-injection pro
 
 | scenario | sent | echoed | lost | loss rate | echo pps | RTT p50 / p95 / p99 (ms) |
 |---|---|---|---|---|---|---|
-| baseline_burst | 2000 | 2000 | 0 | 0.0000 | 1958.5 | 2.117 / 4.656 / 5.517 |
-| baseline_sustained | 9000 | 9000 | 0 | 0.0000 | 3000.3 | 0.003 / 3.047 / 6.952 |
-| fault_sustained (via proxy) | 10000 | 4725 | 5275 | 0.5275 | 945.0 | 116.861 / 162.401 / 245.775 |
-| malformed mix | 400 | 200 | 200 | 0.5000 | 1002.4 | 0.02 / 0.072 / 0.362 |
+| baseline_burst | 2000 | 2000 | 0 | 0.0000 | 1940.8 | 3.786 / 9.348 / 12.486 |
+| baseline_sustained | 9000 | 9000 | 0 | 0.0000 | 2998.4 | 2.703 / 41.96 / 120.452 |
+| fault_sustained (via proxy) | 10000 | 4103 | 5897 | 0.5897 | 812.6 | 149.537 / 364.273 / 443.359 |
+| malformed mix | 400 | 200 | 200 | 0.5000 | 1002.4 | 0.002 / 2.366 / 4.452 |
 
-Fault-proxy decision log (`fault_proxy_log.jsonl`): client datagrams in=10000, server datagrams in=6103, forwarded=10828, dropped by random loss=2680, dropped by flap window=2595, delayed=10828.
+Fault-proxy decision log (`fault_proxy_log.jsonl`): client datagrams in=9316, server datagrams in=5449, forwarded=9552, dropped by random loss=2352, dropped by flap window=2861, delayed=9552.
 
-Echo-server totals for the whole run: received 17503, valid 17303, malformed 200, echoed 17303.
+Echo-server totals for the whole run: received 16849, valid 16649, malformed 200, echoed 16649.
 
 Malformed scenario: 200 malformed datagrams were sent and 0 were echoed back. A correct server echoes none of them; valid packets interleaved in the same stream: loss rate 0.0000.
 
 ## Packet-capture evidence
 
-- File: `captures/fault_scenario.pcap` (8079324 bytes on disk, pcap v2.4, linktype 101)
+- File: `captures/fault_scenario.pcap` (7474824 bytes on disk, pcap v2.4, linktype 101)
 - Capture method: raw-socket (see src/capture.py; fallback is a raw IP socket, primary is tcpdump when installed)
-- Packets in capture: 26931, captured payload bytes: 7648404, capture span: 5.251 s
-- Capture log: `raw-socket captured 26931 packets -> /home/hatch/workspace/oxide-proofs/net-assurance-lab/captures/fault_scenario.pcap`
+- Packets in capture: 24916, captured payload bytes: 7076144, capture span: 5.255 s
+- Capture log: `raw-socket captured 24916 packets -> /home/hatch/workspace/oxide-proofs/net-assurance-lab/captures/fault_scenario.pcap`
 
 ## Localisation / conclusion
 
@@ -40,6 +40,7 @@ Malformed scenario: 200 malformed datagrams were sent and 0 were echoed back. A 
 - Latency inflation in the fault run matches the configured 40 ms base delay + up to 30 ms jitter applied in both directions, i.e. the delay is a path property, not server processing time (the baseline p95 isolates server + loopback cost).
 - Flap drops cluster at the start of each 2.5 s period (proxy log timestamps), distinguishing an intermittent-down link from uniform random loss — in a real rack this pattern points at a flapping optic/cable or a renegotiating port rather than congestion.
 - Malformed datagrams were rejected by header/integrity validation and never echoed, so the server's parser is not the source of the observed loss.
+- Accounting gap, stated plainly: the client sent 10000 datagrams and the proxy received 9316; the 684 datagrams in between were dropped by the kernel receive buffer at the proxy's front socket before user space saw them (single-threaded proxy, per-packet log flush). They are part of the measured client-side loss but are not in the proxy decision log, because the proxy never saw them.
 
 ## Honest limits of this experiment
 

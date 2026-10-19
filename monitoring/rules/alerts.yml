@@ -1,0 +1,166 @@
+# Alert rules for net-assurance-lab -- hand-written for this bench.
+#
+# Semantics specific to this lab (read before wiring a pager):
+#   * The exporter publishes the metrics of ONE finished run
+#     (results/latest). Values are constant between runs, so "for:"
+#     durations below measure "this state has been observed for ...",
+#     i.e. Prometheus has scraped the bad run repeatedly -- they are a
+#     debounce against a half-swapped results directory, not proof a
+#     condition persisted inside the network for that long.
+#   * High loss / high latency are EXPECTED in scenario="fault_sustained"
+#     (that is the injected fault). Production-style regression alerts
+#     therefore scope to the baseline scenarios; the fault scenario has
+#     its own sanity-band alerts (loss far above what the configured
+#     injection explains, flap missing when it should be there).
+#   * Severity ladder: info (worth seeing, e.g. an injected fault was
+#     detected as designed) < warning (healthy-path regression) <
+#     critical (correctness breach or the monitoring itself is blind).
+groups:
+  - name: net-assurance-lab.rules
+    interval: 15s
+    rules:
+      # ---- healthy-path regression (baseline scenarios) ----------------
+      - alert: NalBaselineHighPacketLoss
+        expr: nal_loss_ratio{scenario=~"baseline_.*"} > 0.05
+        for: 1m
+        labels:
+          severity: warning
+          team: net-assurance
+        annotations:
+          summary: "Baseline scenario {{ $labels.scenario }} lost {{ $value | humanizePercentage }} of packets"
+          description: >-
+            A no-fault baseline run lost more than 5% of packets on the
+            loopback bench. Baselines are the control for every fault
+            run, so a lossy baseline invalidates comparisons until the
+            harness/host cause is found.
+
+      - alert: NalBaselineP99LatencyHigh
+        expr: nal_rtt_ms{scenario=~"baseline_.*", stat="p99"} > 50
+        for: 1m
+        labels:
+          severity: warning
+          team: net-assurance
+        annotations:
+          summary: "Baseline p99 RTT is {{ $value }} ms in {{ $labels.scenario }}"
+          description: >-
+            Healthy-path p99 RTT above 50 ms on loopback (the bench's
+            own runs sit in the single-digit ms range). Indicates host
+            scheduling / queueing trouble rather than a link fault --
+            no fault is injected on this path.
+
+      - alert: NalBaselineThroughputCollapse
+        expr: >
+          nal_throughput_pps{kind="echo", scenario=~"baseline_.*"}
+            < 0.5 * nal_throughput_pps{kind="send", scenario=~"baseline_.*"}
+        for: 1m
+        labels:
+          severity: warning
+          team: net-assurance
+        annotations:
+          summary: "Echo throughput collapsed below 50% of send throughput in {{ $labels.scenario }}"
+          description: >-
+            The receiver returned less than half of what the generator
+            sent on a healthy path: receive-buffer overflow or receiver
+            stalls under load, the exact failure mode baseline_burst is
+            designed to expose.
+
+      # ---- fault-scenario sanity band ----------------------------------
+      - alert: NalFaultLossAboveInjectionBand
+        expr: nal_loss_ratio{scenario="fault_sustained"} > 0.75
+        for: 1m
+        labels:
+          severity: warning
+          team: net-assurance
+        annotations:
+          summary: "Fault-scenario loss {{ $value | humanizePercentage }} exceeds the injection band"
+          description: >-
+            Configured injection (20% loss each way compounded with a
+            0.6/2.5 s flap duty cycle) explains roughly 50-65% end-to-end
+            loss. Above 75% something beyond the configured fault is
+            dropping packets; do not attribute the run to the injection
+            parameters alone.
+
+      - alert: NalFaultP99LatencyExtreme
+        expr: nal_rtt_ms{scenario="fault_sustained", stat="p99"} > 1000
+        for: 1m
+        labels:
+          severity: warning
+          team: net-assurance
+        annotations:
+          summary: "Fault-scenario p99 RTT is {{ $value }} ms"
+          description: >-
+            Configured delay is 40 ms + up to 30 ms jitter per leg, so a
+            p99 above 1000 ms means queueing/retransmission behaviour
+            far beyond the injected delay profile.
+
+      # ---- link-flap detection ------------------------------------------
+      - alert: NalLinkFlapDetected
+        expr: nal_link_flap_detected == 1
+        for: 15s
+        labels:
+          severity: info
+          team: net-assurance
+        annotations:
+          summary: "Link-flap drops detected in the exported run"
+          description: >-
+            The fault proxy dropped packets inside flap windows
+            (dropped_flap > 0 in fault_proxy_log.jsonl). In this lab
+            that is the injected fault being observed as designed; on a
+            real path the same signal (loss clustered in periodic
+            down-windows, see nal_fault_proxy_drop_ratio{cause="flap"})
+            is the flap signature to localise.
+
+      - alert: NalFlapShareDominatesLoss
+        expr: nal_fault_proxy_drop_ratio{cause="flap"} > nal_fault_proxy_drop_ratio{cause="loss"}
+        for: 1m
+        labels:
+          severity: info
+          team: net-assurance
+        annotations:
+          summary: "Flap drops now exceed random-loss drops at the proxy"
+          description: >-
+            Localisation aid: when the flap share of drops passes the
+            uniform-loss share, the observed loss pattern is flap-shaped
+            (clustered), not uniform-random. Use it to attribute a loss
+            symptom to link flapping before blaming random loss.
+
+      # ---- correctness breach -------------------------------------------
+      - alert: NalMalformedPacketEchoed
+        expr: nal_malformed_echoed_total > 0
+        for: 0s
+        labels:
+          severity: critical
+          team: net-assurance
+        annotations:
+          summary: "A malformed packet was echoed by the server"
+          description: >-
+            The validating echo server must reject malformed datagrams
+            silently. Any nonzero value is a parser-robustness breach;
+            stop trusting this build's malformed-scenario results.
+
+      # ---- monitoring health ---------------------------------------------
+      - alert: NalResultsStale
+        expr: nal_results_age_seconds > 86400
+        for: 5m
+        labels:
+          severity: warning
+          team: net-assurance
+        annotations:
+          summary: "Exported lab results are more than 24 h old"
+          description: >-
+            The exporter is serving a run older than a day. Dashboards
+            still render, but they describe yesterday's bench, not the
+            current one. Re-run ./run_lab.sh to refresh.
+
+      - alert: NalExporterResultsMissing
+        expr: nal_exporter_results_present == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: net-assurance
+        annotations:
+          summary: "Exporter cannot find a complete set of run artifacts (group {{ $labels.group }})"
+          description: >-
+            A results group failed to load at scrape time. All other
+            nal_* alerts go blind for the affected scenarios; check
+            results/latest on the bench host first.

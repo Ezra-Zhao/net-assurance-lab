@@ -1,0 +1,18 @@
+# Grafana datasource provisioning for net-assurance-lab.
+# Drop this directory tree into Grafana's provisioning path
+# (default /etc/grafana/provisioning, or GF_PATHS_PROVISIONING locally).
+# The uid is fixed to "prometheus" because both shipped dashboards
+# reference the datasource by that uid.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: http://127.0.0.1:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      httpMethod: POST
+      timeInterval: 5s

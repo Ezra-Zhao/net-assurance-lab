@@ -1,0 +1,24 @@
+# Grafana dashboard provisioning for net-assurance-lab.
+#
+# "path" must point at the folder holding the dashboard JSON files
+# (monitoring/grafana/dashboards in this repo). It is given through the
+# NETLAB_DASHBOARDS_PATH environment variable so the same file works
+# for a local binary install and a packaged one:
+#   NETLAB_DASHBOARDS_PATH=/etc/grafana/dashboards  (packaged layout)
+#   NETLAB_DASHBOARDS_PATH=$PWD/monitoring/grafana/dashboards  (this repo)
+# Grafana expands $VAR / ${VAR} in provisioning files at startup.
+# Alternatively the two JSON files can be imported by hand via
+# Dashboards -> New -> Import; provisioning is not required for them.
+apiVersion: 1
+
+providers:
+  - name: "net-assurance-lab"
+    orgId: 1
+    folder: "net-assurance-lab"
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: ${NETLAB_DASHBOARDS_PATH}
+      foldersFromFilesStructure: false
