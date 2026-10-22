@@ -184,3 +184,22 @@ Structured outputs: per-packet CSVs and summary JSONs under
   produces fresh numbers each time (loss is seeded in the proxy, but OS
   scheduling jitter is not), and `results/` keeps each run separate so
   figures can always be traced back to their run.
+
+## Module B — RDMA concept lab (`rdma-lab/`)
+
+A second proof module, scoped for HPC cluster networking
+(InfiniBand / RDMA / RoCE), lives in [`rdma-lab/`](rdma-lab/): a
+Soft-RoCE (rxe) experiment design — bring-up procedure, perftest
+(`ib_send_bw` / `ib_write_bw` / `ib_send_lat`) run and reading guide,
+troubleshooting checklist, and an honest Soft-RoCE-vs-production-fabric
+gap table — plus a 3-minute interview talk track
+(`rdma-lab/talk-track.md`).
+
+Status, stated plainly: **document-level only, not measured.** The
+2026-10-22 attempt on the build VM is recorded verbatim in
+`rdma-lab/attempt-log.md`: the host kernel was built without RDMA
+support (`# CONFIG_INFINIBAND is not set`, no `/lib/modules`, no
+`/sys/class/infiniband`), so no RDMA device could be created and no
+benchmark was run. No latency or bandwidth figure is claimed for this
+module; `rdma-lab/README.md` gives the exact procedure to reproduce
+it on a host that can load `rdma_rxe`.
